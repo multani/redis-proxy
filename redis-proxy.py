@@ -78,23 +78,21 @@ class Pipe:
     async def flow(self):
         """Read from the StreamReader and sends to the StreamWriter"""
 
-        while True:
-            try:
+        try:
+            while not self.reader.at_eof():
                 data = await self.reader.read(2**16)
-            except asyncio.CancelledError:
-                # Somebody cancelled us (most probably the other side of the proxy)
-                self.logger.debug("cancelled!")
-                break
+                if data == b"":
+                    self.logger.debug("EOF")
+                    return
 
-            if data == b"":
-                # The other side we are reading from is closed :(
-                self.logger.debug("EOF")
-                return
+                # Pipe the data we just read to the other side
+                self.logger.info("data=%s", data)
+                self.writer.write(data)
+                await self.writer.drain()
 
-            # Pipe the data we just read to the other side
-            self.logger.info("data=%s", data)
-            self.writer.write(data)
-            await self.writer.drain()
+        finally:
+            self.writer.close()
+            await self.writer.wait_closed()
 
 
 class Server:
